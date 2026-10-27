@@ -113,14 +113,19 @@ def sample() -> Sample:
     import time
 
     memory = psutil.virtual_memory()
-    swap = psutil.swap_memory()
+    try:
+        swap = psutil.swap_memory()
+        page_total = int(swap.total)
+        page_used = int(swap.used)
+        page_percent = float(swap.percent) if page_total else 0.0
+    except (RuntimeError, OSError):
+        # The page-file counters can be unavailable (for example on some CI runners).
+        page_total = page_used = 0
+        page_percent = 0.0
     ram_total = int(memory.total)
     ram_available = int(memory.available)
     ram_used = int(getattr(memory, "used", ram_total - ram_available))
     ram_percent = float(memory.percent)
-    page_total = int(swap.total)
-    page_used = int(swap.used)
-    page_percent = float(swap.percent) if page_total else 0.0
     commit_used, commit_total, estimated = read_commit_counters()
     if estimated:
         commit_used = max(0, ram_used) + max(0, page_used)

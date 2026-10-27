@@ -196,7 +196,7 @@ def test_toast_keeps_the_message_out_of_the_command() -> None:
     assert "UNIQUE_BODY_9f3a" not in " ".join(command)
     assert env["HEADROOM_TOAST_BODY"] == body
     assert command[0] == "powershell.exe"
-    notifier = WindowsToastNotifier()
+    notifier = WindowsToastNotifier(enabled=False)
     assert notifier.enabled is False
     notifier.notify(evaluate(make_sample(ram_percent=99), AlertState(), Config(ram_sustained_seconds=0), 0)[0])
 

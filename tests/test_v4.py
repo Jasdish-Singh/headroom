@@ -84,6 +84,16 @@ def _request(
     return status, data
 
 
+def _strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for item in value.values() for text in _strings(item)]
+    if isinstance(value, list):
+        return [text for item in value for text in _strings(item)]
+    return []
+
+
 def test_dashboard_requires_loopback_token_and_move(tmp_path: Path) -> None:
     with pytest.raises(DashboardError):
         bind_dashboard("0.0.0.0", 0, "token")
@@ -133,7 +143,7 @@ def test_dashboard_requires_loopback_token_and_move(tmp_path: Path) -> None:
         assert status == 200
         status, review = _request(port, "GET", f"/api/review?token={token}")
         assert status == 200
-        assert str(extra) in review.decode("utf-8")
+        assert str(extra) in _strings(json.loads(review))
 
         refused = urlencode([("token", token), ("confirm", "no"), ("path", str(extra))]).encode()
         status, body = _request(

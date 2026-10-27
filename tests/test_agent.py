@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -507,6 +508,7 @@ def test_frozen_logon_launcher_starts_watch_and_optional_pet(
     assert saved.count("<Exec>") == 2
 
 
+@pytest.mark.skipif(os.name == "nt", reason="faking a non-Windows os.name breaks pathlib on Windows")
 def test_history_commands_and_refusing_install_off_windows(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
