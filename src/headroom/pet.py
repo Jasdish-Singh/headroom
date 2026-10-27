@@ -20,9 +20,7 @@ import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from headroom.alerts import disk_pressure
 from headroom.config import Config
-from headroom.formatutil import format_bytes
 from headroom.pets.draw import COLUMNS, FRAME_H, FRAME_W, ROW_NAMES
 from headroom.plugins import SKINS, iter_plugins
 from headroom.rules import state_dir
@@ -35,18 +33,16 @@ PAUSED_CHECK_MS = 5000
 LITE_CHECK_MS = 5000
 SHARED_POLL_SECONDS = 5.0
 SOLO_POLL_SECONDS = 15.0
-GRIME_SECONDS = 300.0
 TASKBAR_MARGIN = 72
 WALK_SPEED = 4
 DRAG_THRESHOLD = 5
 KEY_COLOR = "#ff00ff"
 PET_NAMES = ("roomy", "midnight", "tower")
-DUST_BYTES = 2 * 1024**3
-SLIME_BYTES = 10 * 1024**3
 
 MENU_ACTIONS = ("dashboard", "report", "mute", "hide", "quit")
 STATS_NAME = "watch-stats.json"
 SPARKLE_NAME = "sparkle.pending"
+WIDGET_ENABLED_NAME = "widget.enabled"
 
 
 @dataclass
@@ -161,19 +157,6 @@ class Animator:
             self.x = nxt
 
 
-def grime_level(cleanable_bytes: int) -> str:
-    """Strictly over 10 GiB is slimy. Strictly over 2 GiB is dusty."""
-    if cleanable_bytes > SLIME_BYTES:
-        return "slimy"
-    if cleanable_bytes > DUST_BYTES:
-        return "dusty"
-    return "clean"
-
-
-def cleanable_total(preview_bytes: int, suggestion_bytes: int) -> int:
-    return max(0, int(preview_bytes)) + max(0, int(suggestion_bytes))
-
-
 def cleanup_should_sparkle(*, dry_run: bool, freed_bytes: int) -> bool:
     """A real cleanup that freed bytes shakes the dust off. A dry run does not."""
     return (not dry_run) and freed_bytes > 0
@@ -190,47 +173,24 @@ def choose_mood(
     *,
     idle_for: float | None,
     scanning: bool,
-    grime: str = "clean",
 ) -> str:
-    """Health wins over idle. Dust shows only on an otherwise happy PC."""
+    """Scanning and high RAM win over idle. The face no longer reads disk or grime."""
     if scanning:
         return "scan"
-    disk = _drive(sample, "C:")
-    if disk is not None and disk_pressure(disk.free, config) != "ok":
-        return "stuffed"
     if sample.memory.ram_percent > config.ram_percent:
         return "tired"
     if idle_for is not None and idle_for >= config.idle_after_seconds:
         return "sleep"
-    if grime == "slimy":
-        return "slimy"
-    if grime == "dusty":
-        return "dusty"
     return "happy"
 
 
 def bubble_text(sample, top, config: Config, mood: str, *, muted: bool) -> str | None:
-    """Short tip for the current mood. Mute and sleep stay quiet."""
-    del config
-    if muted or mood in {"sleep", "power", "happy", "sparkle"}:
+    """A short RAM readout. Mute, sleep, power-on, scanning, and sparkle stay quiet."""
+    del top, config
+    if muted or mood in {"sleep", "power", "scan", "sparkle"}:
         return None
-    if mood == "stuffed":
-        disk = _drive(sample, "C:")
-        if disk is None or disk.total <= 0:
-            return "C: is low on space, want a review?"
-        used = int(round((disk.total - disk.free) * 100 / disk.total))
-        return f"C: is {used}% full, want a review?"
-    if mood == "tired":
-        if top is None:
-            return "RAM is above the line."
-        return f"{top.name} is eating {format_bytes(top.rss_bytes)}"
-    if mood == "scan":
-        return "Scanning."
-    if mood == "dusty":
-        return "A bit dusty. Over 2 GB could use a review."
-    if mood == "slimy":
-        return "Slimy. Over 10 GB could use a review."
-    return None
+    percent = int(round(float(sample.memory.ram_percent)))
+    return f"RAM {percent}% used"
 
 
 def pointer_kind(dx: int, dy: int, threshold: int = DRAG_THRESHOLD) -> str:
@@ -250,8 +210,18 @@ def menu_entries(muted: bool) -> tuple[tuple[str, str], ...]:
     )
 
 
-def should_launch_pet(config: Config, *, once: bool) -> bool:
-    return bool(config.widget_autostart) and not once
+def should_launch_pet(
+    config: Config, *, once: bool, directory: Path | None = None
+) -> bool:
+    """Roomy auto-starts when the dashboard toggle is on, and stays off when it is off.
+
+    The persisted toggle wins over ``widget.autostart``. When it was never set,
+    the config flag decides.
+    """
+    enabled = pet_enabled(directory)
+    if enabled is None:
+        enabled = bool(config.widget_autostart)
+    return enabled and not once
 
 
 def default_origin(screen_w: int, screen_h: int) -> tuple[int, int]:
@@ -401,6 +371,50 @@ def save_settings(settings: PetSettings, directory: Path | None = None) -> None:
     path = settings_path(directory)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(settings.to_json(), encoding="utf-8")
+
+
+def pet_enabled(directory: Path | None = None) -> bool | None:
+    """The dashboard toggle. True on, False off, None when it was never set."""
+    path = (state_dir() if directory is None else directory) / WIDGET_ENABLED_NAME
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if text == "1":
+        return True
+    if text == "0":
+        return False
+    return None
+
+
+def set_pet_enabled(enabled: bool, directory: Path | None = None) -> None:
+    folder = state_dir() if directory is None else directory
+    path = folder / WIDGET_ENABLED_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("1\n" if enabled else "0\n", encoding="utf-8")
+
+
+def pet_running(directory: Path | None = None) -> bool:
+    """True when a live Roomy answers its loopback control port."""
+    folder = state_dir() if directory is None else directory
+    path = folder / "pet.port"
+    if not path.is_file():
+        return False
+    try:
+        parts = path.read_text(encoding="utf-8").split()
+        port = int(parts[0])
+        pid = int(parts[1]) if len(parts) > 1 else None
+    except (OSError, ValueError):
+        return False
+    if pid is not None and not _pid_alive(pid):
+        return False
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+            return True
+    except OSError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -664,18 +678,22 @@ def start_dashboard_server() -> str:
     return f"http://127.0.0.1:{port}/?token={token}"
 
 
-def launch_pet_if_needed(config: Config, *, once: bool, launch=None) -> bool:
-    if not should_launch_pet(config, once=once):
+def launch_pet_if_needed(
+    config: Config, *, once: bool, launch=None, directory: Path | None = None
+) -> bool:
+    if not should_launch_pet(config, once=once, directory=directory):
         return False
     if launch is None:
-        launch_pet_detached(lite=bool(config.widget_lite))
+        launch_pet_detached(lite=bool(config.widget_lite), directory=directory)
     else:
         launch()
     return True
 
 
-def launch_pet_detached(lite: bool = False) -> None:
-    if send_control("show"):
+def launch_pet_detached(lite: bool = False, directory: Path | None = None) -> None:
+    folder = state_dir() if directory is None else directory
+    if pet_running(folder):
+        send_control("show", folder)
         return
     from headroom.autostart import app_command
 
@@ -821,13 +839,6 @@ class PetSession:
         self.shared_reads = 0
         self.uses_shared = False
         self._top_at: float | None = None
-        self.grime = "clean"
-        self.grime_bytes = 0
-        self.last_grime: float | None = None
-        self._grime_running = False
-        self._grime_lock = threading.Lock()
-        self._pending_grime: str | None = None
-        self._pending_bytes = 0
         self.dashboard: dict[str, object] = {}
 
     def sample_health(
@@ -839,25 +850,11 @@ class PetSession:
         idle,
         scanning,
         snapshot=None,
-        grime_bytes: int | None = None,
     ) -> None:
         self.probes += 1
         self.last_health = now
         if consume_sparkle(self.directory):
-            with self._grime_lock:
-                self._pending_grime = None
-            self.grime = "clean"
-            self.grime_bytes = 0
-            self.last_grime = None
             self.animator.play_sparkle()
-            if self.animator.mood in {"dusty", "slimy"}:
-                self.animator.mood = "happy"
-        if grime_bytes is not None:
-            self.grime_bytes = grime_bytes
-            self.grime = grime_level(grime_bytes)
-        else:
-            self._take_pending_grime()
-            self._kick_grime(now)
         snap = None
         if snapshot is not False:
             reader = read_watch_sample if snapshot is None else snapshot
@@ -902,45 +899,12 @@ class PetSession:
                 self.config,
                 idle_for=idle_for,
                 scanning=active,
-                grime=self.grime,
             )
         )
 
     def due(self, now: float) -> bool:
         interval = SHARED_POLL_SECONDS if self.uses_shared else SOLO_POLL_SECONDS
         return self.last_health is None or now - self.last_health >= interval
-
-    def _take_pending_grime(self) -> None:
-        with self._grime_lock:
-            if self._pending_grime is None:
-                return
-            self.grime = self._pending_grime
-            self.grime_bytes = self._pending_bytes
-            self._pending_grime = None
-
-    def _kick_grime(self, now: float) -> None:
-        if self._grime_running:
-            return
-        if self.last_grime is not None and now - self.last_grime < GRIME_SECONDS:
-            return
-        self.last_grime = now
-        self._grime_running = True
-
-        def work() -> None:
-            level: str | None = None
-            amount = 0
-            try:
-                amount = measure_cleanable_bytes(self.config, self.directory)
-                level = grime_level(amount)
-            except Exception:
-                level = None
-            with self._grime_lock:
-                self._grime_running = False
-                if level is not None:
-                    self._pending_grime = level
-                    self._pending_bytes = amount
-
-        threading.Thread(target=work, name="headroom-pet-grime", daemon=True).start()
 
     def bubble(self) -> str | None:
         if self.sample is None:
@@ -1216,13 +1180,6 @@ def _browser(url: str) -> None:
     webbrowser.open(url)
 
 
-def _drive(sample, key: str):
-    for disk in sample.disks:
-        if disk.key == key:
-            return disk
-    return None
-
-
 def _scan_path(directory: Path | None) -> Path:
     return (state_dir() if directory is None else directory) / "scan.running"
 
@@ -1244,20 +1201,6 @@ def _call_top(top):
     except Exception:
         return None
     return rows[0] if rows else None
-
-
-def measure_cleanable_bytes(config: Config, directory: Path) -> int:
-    """Read-only size of allowlisted cache plus tossable suggestions."""
-    from datetime import date
-
-    from headroom.cleanup import build_preview, default_recycle_backend, discover_groups
-    from headroom.review import collect_suggestions
-
-    groups, context = discover_groups(config.enabled_cleanup, os.environ)
-    preview = build_preview(groups, default_recycle_backend(), context)
-    suggestions, _roots = collect_suggestions(directory, now=time.time(), today=date.today())
-    suggestion_bytes = sum(item.record.size for item in suggestions)
-    return cleanable_total(preview.total_bytes, suggestion_bytes)
 
 
 @dataclass(frozen=True)
