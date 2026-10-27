@@ -479,9 +479,13 @@ def test_scan_skips_links_and_caps_the_review_list(tmp_path: Path, monkeypatch: 
     right = root / "right.bin"
     left.write_bytes(b"aaaaXXX")
     right.write_bytes(b"aaaaYYY")
-    hashed = scan([root / "left.bin", root / "right.bin"], now=now)
+    hashed = scan([left, right], now=now)
+    assert [record for record in hashed.records if record.duplicate_of] == []
+    twin = root / "twin.bin"
+    twin.write_bytes(b"aaaaXXX")
+    hashed = scan([left, right, twin], now=now)
     copies = [record for record in hashed.records if record.duplicate_of]
-    assert len(copies) == 1
+    assert [(Path(item.path).name, Path(item.duplicate_of).name) for item in copies] == [("twin.bin", "left.bin")]
 
 
 def test_review_moves_only_approved_files_and_archives(tmp_path: Path) -> None:

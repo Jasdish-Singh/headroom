@@ -26,13 +26,12 @@ from headroom.config import Config, ConfigError, config_from_mapping
 from headroom.history import (
     HistoryStore,
     ProcessPoint,
-    build_changes,
     build_report,
     disk_trend,
     find_leaks,
     folder_diff,
 )
-from headroom.instance import InstanceLock
+from headroom.instance import InstanceLock, read_lock_pid
 from headroom.probe import DiskStatus
 from headroom.render import format_report, format_self
 from headroom.schedule import choose_interval, detect_resume, lower_priority, on_battery
@@ -135,6 +134,20 @@ def test_instance_lock_rejects_a_second_holder(tmp_path: Path) -> None:
     assert second.acquire() is True
     second.release()
     assert path.read_text(encoding="utf-8").strip().isdigit()
+
+
+def test_lock_holder_pid_stays_readable(tmp_path: Path) -> None:
+    path = tmp_path / "headroom.lock"
+    lock = InstanceLock(path)
+    assert lock.acquire()
+    try:
+        assert read_lock_pid(path) == os.getpid()
+    finally:
+        lock.release()
+    assert read_lock_pid(path) == os.getpid()
+    path.write_bytes(b"4242\n".ljust(32, b" "))
+    assert read_lock_pid(path) == 4242
+    assert read_lock_pid(tmp_path / "missing.lock") is None
 
 
 def test_session_stop_is_idempotent() -> None:
@@ -473,17 +486,17 @@ def test_frozen_logon_launcher_starts_watch_and_optional_pet(
     assert app_command("watch") == [exe, "watch"]
     assert logon_commands(include_pet=False) == [[exe, "watch"]]
     both = logon_commands(include_pet=True)
-    assert both == [[exe, "watch"], [exe, "pet"]]
+    assert both == [[exe, "watch"], [exe, "pet", "--if-enabled"]]
     xml = build_task_xml(both[0], commands=both)
     assert xml.count("<Exec>") == 2
     assert "headroom.exe" in xml
     assert ">watch<" in xml
-    assert ">pet<" in xml
+    assert ">pet --if-enabled<" in xml
     assert "-m headroom" not in xml
     script = vbs_source(both[0], commands=both)
     assert script.count("Wscript.Shell") == 2
     assert '""C:\\Program Files\\Headroom\\headroom.exe"" watch' in script
-    assert '""C:\\Program Files\\Headroom\\headroom.exe"" pet' in script
+    assert '""C:\\Program Files\\Headroom\\headroom.exe"" pet --if-enabled' in script
 
     calls: list[list[str]] = []
 

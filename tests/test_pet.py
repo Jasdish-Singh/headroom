@@ -9,13 +9,11 @@ import pytest
 
 from headroom.config import Config, ConfigError, config_from_mapping
 from headroom.pet import (
-    DUST_BYTES,
     IDLE_FRAME_MS,
     LITE_CHECK_MS,
     MENU_ACTIONS,
     PAUSED_CHECK_MS,
     PET_NAMES,
-    SLIME_BYTES,
     WALK_FRAME_MS,
     Animator,
     FrameDeck,
@@ -25,20 +23,21 @@ from headroom.pet import (
     WatchSnapshot,
     bubble_text,
     choose_mood,
-    cleanable_total,
     cleanup_should_sparkle,
     consume_sparkle,
     covers_screen,
     display_frame,
     frame_delay,
-    grime_level,
     launch_pet_if_needed,
     mark_sparkle,
     measure_pet_cost,
     menu_entries,
+    pet_enabled,
+    pet_running,
     publish_watch_sample,
     read_watch_sample,
     review_should_sparkle,
+    set_pet_enabled,
     wake_delay,
 )
 from headroom.pets.draw import COLUMNS, FRAME_H, FRAME_W, ROW_NAMES, render_frame
@@ -95,12 +94,7 @@ def test_scan_face_is_a_green_grid_and_tower_is_a_different_body() -> None:
     assert (255, 255, 255) in sparkle.px
 
 
-def test_grime_thresholds_are_strict() -> None:
-    assert grime_level(DUST_BYTES) == "clean"
-    assert grime_level(DUST_BYTES + 1) == "dusty"
-    assert grime_level(SLIME_BYTES) == "dusty"
-    assert grime_level(SLIME_BYTES + 1) == "slimy"
-    assert cleanable_total(DUST_BYTES, 1) == DUST_BYTES + 1
+def test_sparkle_follows_real_cleanup_and_review_moves() -> None:
     assert cleanup_should_sparkle(dry_run=True, freed_bytes=50) is False
     assert cleanup_should_sparkle(dry_run=False, freed_bytes=0) is False
     assert cleanup_should_sparkle(dry_run=False, freed_bytes=1) is True
@@ -109,45 +103,21 @@ def test_grime_thresholds_are_strict() -> None:
     assert review_should_sparkle(archived=0, recycled=2) is True
 
 
-def test_mood_priority_and_bubbles() -> None:
+def test_mood_priority_and_bubbles_are_ram_only() -> None:
     config = Config()
     healthy = make_sample(ram_percent=10)
     tired = make_sample(ram_percent=90)
     idle = config.idle_after_seconds
-    assert choose_mood(healthy, config, idle_for=idle, scanning=True, grime="slimy") == "scan"
-    low_disk = make_sample(
-        ram_percent=90,
-        disks=(
-            make_sample().disks[0].__class__(
-                mount="C:\\",
-                device="C:",
-                total=100,
-                used=90,
-                free=10,
-                key="C:",
-            ),
-        ),
-    )
-    assert choose_mood(low_disk, config, idle_for=None, scanning=False, grime="dusty") == "stuffed"
-    assert choose_mood(tired, config, idle_for=idle, scanning=False, grime="slimy") == "tired"
-    assert choose_mood(healthy, config, idle_for=idle, scanning=False, grime="slimy") == "sleep"
-    assert choose_mood(healthy, config, idle_for=idle - 1, scanning=False, grime="slimy") == "slimy"
-    assert choose_mood(healthy, config, idle_for=0, scanning=False, grime="dusty") == "dusty"
-    assert choose_mood(healthy, config, idle_for=0, scanning=False, grime="clean") == "happy"
+    assert choose_mood(healthy, config, idle_for=idle, scanning=True) == "scan"
+    assert choose_mood(tired, config, idle_for=idle, scanning=False) == "tired"
+    assert choose_mood(healthy, config, idle_for=idle, scanning=False) == "sleep"
+    assert choose_mood(healthy, config, idle_for=0, scanning=False) == "happy"
     assert choose_mood(make_sample(ram_percent=config.ram_percent), config, idle_for=None, scanning=False) == "happy"
 
-    class Top:
-        name = "Chrome"
-        rss_bytes = 3 * 1024**3
-
-    assert bubble_text(healthy, Top(), config, "tired", muted=False) == "Chrome is eating 3.0 GB"
-    assert bubble_text(healthy, Top(), config, "tired", muted=True) is None
-    stuffed = bubble_text(low_disk, None, config, "stuffed", muted=False)
-    assert stuffed is not None and stuffed.startswith("C: is ")
-    assert bubble_text(healthy, None, config, "scan", muted=False) == "Scanning."
-    assert "2 GB" in (bubble_text(healthy, None, config, "dusty", muted=False) or "")
-    assert "10 GB" in (bubble_text(healthy, None, config, "slimy", muted=False) or "")
-    assert bubble_text(healthy, None, config, "happy", muted=False) is None
+    assert bubble_text(make_sample(ram_percent=62.4), None, config, "happy", muted=False) == "RAM 62% used"
+    assert bubble_text(tired, None, config, "tired", muted=True) is None
+    assert bubble_text(tired, None, config, "sleep", muted=False) is None
+    assert bubble_text(tired, None, config, "scan", muted=False) is None
 
 
 def test_animator_walks_only_when_happy_and_sparkle_holds_still() -> None:
@@ -230,7 +200,6 @@ def test_watch_snapshot_is_reused_and_a_stale_one_is_ignored(tmp_path: Path) -> 
         top=lambda _n: calls.append("top"),
         idle=lambda: calls.append("idle"),
         scanning=lambda: False,
-        grime_bytes=0,
     )
     assert calls == []
     assert session.uses_shared is True
@@ -258,7 +227,6 @@ def test_high_ram_asks_for_the_top_process_once(tmp_path: Path) -> None:
         top=top,
         idle=lambda: None,
         scanning=lambda: False,
-        grime_bytes=SLIME_BYTES + 5,
     )
     session.sample_health(
         now=12,
@@ -266,14 +234,13 @@ def test_high_ram_asks_for_the_top_process_once(tmp_path: Path) -> None:
         top=top,
         idle=lambda: None,
         scanning=lambda: False,
-        grime_bytes=SLIME_BYTES + 5,
     )
     assert tops == [1]
     assert session.animator.mood == "tired"
-    assert session.bubble() == "Chrome is eating 3.0 GB"
+    assert session.bubble() == "RAM 91% used"
 
 
-def test_sparkle_marker_clears_grime_until_remeasured(tmp_path: Path) -> None:
+def test_sparkle_marker_plays_the_sparkle_animation(tmp_path: Path) -> None:
     mark_sparkle(tmp_path)
     assert consume_sparkle(tmp_path) is True
     assert consume_sparkle(tmp_path) is False
@@ -282,8 +249,6 @@ def test_sparkle_marker_clears_grime_until_remeasured(tmp_path: Path) -> None:
     publish_watch_sample(sample, 0, tmp_path)
     session = _session(tmp_path)
     session.animator.power_left = 0
-    session.grime = "slimy"
-    session.animator.mood = "slimy"
     session.sample_health(
         now=5,
         probe=lambda: sample,
@@ -291,10 +256,8 @@ def test_sparkle_marker_clears_grime_until_remeasured(tmp_path: Path) -> None:
         idle=lambda: 0,
         scanning=lambda: False,
         snapshot=lambda *_args, **_kwargs: None,
-        grime_bytes=0,
     )
     assert session.animator.sparkle_left == 4
-    assert session.grime == "clean"
     assert session.animator.current()[0] == "sparkle"
 
 
@@ -309,6 +272,36 @@ def test_lite_config_and_autostart_flag() -> None:
     assert launch_pet_if_needed(Config(widget_autostart=True), once=False, launch=lambda: launched.append("yes"))
     assert launched == ["yes"]
     assert "tower" in PET_NAMES
+
+
+def test_dashboard_toggle_overrides_autostart(tmp_path: Path) -> None:
+    set_pet_enabled(False, tmp_path)
+    assert pet_enabled(tmp_path) is False
+    assert launch_pet_if_needed(
+        Config(widget_autostart=True),
+        once=False,
+        directory=tmp_path,
+        launch=lambda: (_ for _ in ()).throw(AssertionError("should not launch")),
+    ) is False
+
+    set_pet_enabled(True, tmp_path)
+    assert pet_enabled(tmp_path) is True
+    launched: list[str] = []
+    assert launch_pet_if_needed(
+        Config(widget_autostart=False),
+        once=False,
+        directory=tmp_path,
+        launch=lambda: launched.append("yes"),
+    )
+    assert launched == ["yes"]
+    assert launch_pet_if_needed(Config(widget_autostart=True), once=True, directory=tmp_path) is False
+    assert pet_enabled(tmp_path / "never") is None
+
+
+def test_pet_running_is_false_without_a_live_process(tmp_path: Path) -> None:
+    assert pet_running(tmp_path) is False
+    (tmp_path / "pet.port").write_text("65534 99999999\n", encoding="utf-8")
+    assert pet_running(tmp_path) is False
 
 
 def test_sprites_are_cropped_once() -> None:

@@ -24,7 +24,7 @@ def test_readme_explains_usage_and_safety() -> None:
         "Type YES",
         "Type MOVE",
         "MIT",
-        "placeholder",
+        "headroom-pc[tray]",
         "Jasdish-Singh/headroom",
     ):
         assert snippet in text

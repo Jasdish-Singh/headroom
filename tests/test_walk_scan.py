@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from headroom.analyze import scan
+from headroom.dupes import find_duplicates
 from headroom.safety import SafetyError, assert_contained
 from headroom.scan import scan_path
 from headroom.walk import (
     classify_from_stat,
+    hash_file,
     list_child_names,
     measure_tree,
     plan_deletions,
@@ -33,6 +38,25 @@ def test_reparse_point_is_a_link_even_when_it_looks_like_a_directory() -> None:
     assert classify_from_stat(is_symlink=False, stat_result=normal_file, stat_error=False) == "file"
     assert classify_from_stat(is_symlink=True, stat_result=normal_dir, stat_error=False) == "link"
     assert classify_from_stat(is_symlink=False, stat_result=None, stat_error=True) == "error"
+
+
+def test_hashes_read_raw_bytes(tmp_path: Path) -> None:
+    folder = tmp_path / "Pictures"
+    folder.mkdir()
+    header = b"\x89PNG\r\n\x1a\n"
+    first = folder / "cat.png"
+    second = folder / "dog.png"
+    first.write_bytes(header + b"cat-pixels\r\n")
+    second.write_bytes(header + b"dog-pixels\r\n")
+    assert hash_file(first) == hashlib.sha256(first.read_bytes()).hexdigest()
+    assert hash_file(first, 9) == hashlib.sha256(first.read_bytes()[:9]).hexdigest()
+    assert hash_file(first) != hash_file(second)
+    assert hash_file(folder / "missing.png") is None
+
+    groups, _skipped = find_duplicates([folder])
+    assert groups == []
+    records = scan([folder], now=time.time()).records
+    assert [record.duplicate_of for record in records] == [None, None]
 
 
 def test_scan_reports_immediate_children(tmp_path: Path) -> None:

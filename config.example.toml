@@ -54,7 +54,7 @@ deep_scan_budget_seconds = 0.2
 paths = []
 
 [widget]
-# Launch Roomy with `headroom watch`. The pet is read-only.
+# Launch Roomy with `headroom watch`. The dashboard on/off toggle overrides this.
 autostart = false
 # Static face. Mood still changes. Walking and blinking stay off.
 lite = false

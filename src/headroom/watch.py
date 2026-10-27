@@ -163,7 +163,7 @@ def run_tray(
         from PIL import Image, ImageDraw
     except ImportError as exc:
         raise ImportError(
-            "tray support requires pystray and Pillow. Install with: pip install \"headroom[tray]\""
+            "tray support requires pystray and Pillow. Install with: pip install \"headroom-pc[tray]\""
         ) from exc
 
     log = logger or logging.getLogger("headroom")

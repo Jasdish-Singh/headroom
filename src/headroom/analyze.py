@@ -6,7 +6,6 @@ its report under Headroom's own state directory.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from dataclasses import dataclass, field
@@ -15,7 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from headroom.formatutil import format_bytes
 from headroom.rules import CATEGORIES, state_dir
-from headroom.walk import classify_path, list_child_names, measure_tree
+from headroom.walk import classify_path, hash_file, list_child_names, measure_tree
 
 STALE_DAYS = 180
 RECENT_DAYS = 14
@@ -495,51 +494,44 @@ def _mark_duplicates(records: list[FileRecord], now: float) -> None:
         if record.is_dir or record.size <= 0:
             continue
         by_size.setdefault(record.size, []).append(record)
-    for group in by_size.values():
+    for size, group in by_size.items():
         if len(group) < 2:
             continue
         group.sort(key=lambda item: item.path)
-        hashed: dict[str, str] = {}
-        for record in group:
-            digest = _digest(Path(record.path))
-            if digest is None:
-                continue
-            original = hashed.get(digest)
-            if original is None:
-                hashed[digest] = record.path
-                continue
-            record.duplicate_of = original
-            record.base_category = record.base_category or record.category
-            record.category = "duplicates"
-            record.importance = importance("duplicates", record.accessed, now)
+        for same in _same_content(group, size):
+            original = same[0].path
+            for record in same[1:]:
+                record.duplicate_of = original
+                record.base_category = record.base_category or record.category
+                record.category = "duplicates"
+                record.importance = importance("duplicates", record.accessed, now)
 
 
-def _digest(path: Path) -> str | None:
-    flags = os.O_RDONLY
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    noatime = getattr(os, "O_NOATIME", 0)
-    if nofollow:
-        flags |= nofollow
-    fd = None
-    try:
-        try:
-            fd = os.open(path, flags | noatime) if noatime else os.open(path, flags)
-        except OSError:
-            fd = os.open(path, flags)
-        hasher = hashlib.sha256()
-        remaining = _HASH_LIMIT
-        while remaining > 0:
-            chunk = os.read(fd, min(65536, remaining))
-            if not chunk:
-                break
-            hasher.update(chunk)
-            remaining -= len(chunk)
-        return hasher.hexdigest()
-    except OSError:
-        return None
-    finally:
-        if fd is not None:
-            os.close(fd)
+def _same_content(group: list[FileRecord], size: int) -> list[list[FileRecord]]:
+    """Split same-size records into sets with equal bytes.
+
+    The prefix hash is only a filter. A file longer than the prefix counts as a
+    duplicate after its whole content matches.
+    """
+    buckets: dict[str, list[FileRecord]] = {}
+    for record in group:
+        digest = hash_file(Path(record.path), _HASH_LIMIT)
+        if digest is not None:
+            buckets.setdefault(digest, []).append(record)
+    matches: list[list[FileRecord]] = []
+    for bucket in buckets.values():
+        if len(bucket) < 2:
+            continue
+        if size <= _HASH_LIMIT:
+            matches.append(bucket)
+            continue
+        full: dict[str, list[FileRecord]] = {}
+        for record in bucket:
+            digest = hash_file(Path(record.path))
+            if digest is not None:
+                full.setdefault(digest, []).append(record)
+        matches.extend(same for same in full.values() if len(same) > 1)
+    return matches
 
 
 def _project_marker(name: str) -> bool:
