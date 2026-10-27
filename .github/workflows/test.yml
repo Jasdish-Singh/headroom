@@ -1,0 +1,47 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Run tests
+        run: python -m pytest
+
+  package:
+    name: windows exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build headroom.exe
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller ".[tray,mcp]"
+          python -m PyInstaller --noconfirm packaging/headroom.spec
+      - name: Upload headroom.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: headroom.exe
+          path: dist/headroom.exe
+          if-no-files-found: error

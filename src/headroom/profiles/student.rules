@@ -1,0 +1,34 @@
+# Student
+# Previous-semester assignments are tossable. Course shells and teaching
+# content stay. "semester: past" means a Fall/Spring/Summer/Winter label
+# in the path that is earlier than the current semester. This file only
+# suggests. Nothing is moved until you approve it in headroom review.
+#
+# Last matching rule wins. Keep rules are last so a syllabus inside an old
+# homework folder is kept.
+
+toss path: */homework/* semester: past
+toss path: */homeworks/* semester: past
+toss path: */assignments/* semester: past
+toss path: */assignment/* semester: past
+toss path: */essays/* semester: past
+toss path: */labs/* semester: past
+toss path: */problem-sets/* semester: past
+toss path: */problem sets/* semester: past
+toss name: *homework* semester: past
+toss name: *assignment* semester: past
+toss name: *essay* semester: past
+toss name: *problem-set* semester: past
+toss name: *problemset* semester: past
+
+keep name: *syllabus*
+keep name: *lecture*
+keep name: *slides*
+keep name: *notes*
+keep name: *reading*
+keep name: *rubric*
+keep path: *course-shell*
+keep path: *course shell*
+keep path: *course-content*
+keep path: *course content*
+keep path: */modules/*

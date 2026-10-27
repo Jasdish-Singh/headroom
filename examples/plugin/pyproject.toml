@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "headroom-demo-plugin"
+version = "4.0.0"
+description = "Example Headroom plugin: a scratch-file scanner, profile, and report section."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[project.entry-points."headroom.scanners"]
+scratch = "headroom_demo_plugin:scan"
+
+[project.entry-points."headroom.profiles"]
+scratch = "headroom_demo_plugin:profile"
+
+[project.entry-points."headroom.reports"]
+scratch = "headroom_demo_plugin:report_section"
+
+[tool.setuptools]
+py-modules = ["headroom_demo_plugin"]

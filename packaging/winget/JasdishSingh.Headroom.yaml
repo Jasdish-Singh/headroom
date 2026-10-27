@@ -1,0 +1,6 @@
+# winget manifest template. Replace InstallerUrl and InstallerSha256 before publishing.
+PackageIdentifier: JasdishSingh.Headroom
+PackageVersion: 0.1.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

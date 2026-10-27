@@ -1,0 +1,36 @@
+# Gamer
+# Installed games and save folders are kept. Installers last opened 30 days
+# ago or earlier, and temp shader or launcher caches, are tossable. Last
+# matching rule wins, so a save file stays even if it sits near a cache path,
+# and an installer inside a game install stays with the game.
+
+toss ext: .iso older-than: 30d
+toss ext: .msi older-than: 30d
+toss ext: .dmg older-than: 30d
+toss name: *setup* ext: .exe older-than: 30d
+toss name: *installer* older-than: 30d
+toss name: *setup* ext: .msi older-than: 30d
+
+keep path: */steamapps/*
+keep path: */steamapps
+keep path: */epic games/*
+keep path: */gog games/*
+keep path: */gog galaxy/*
+keep path: */riot games/*
+keep path: */battlenet/*
+
+toss path: *shadercache*
+toss path: *shader cache*
+toss path: *dxcache*
+toss path: *gpucache*
+toss path: */steam/appcache*
+toss path: */steam/appcache/*
+toss path: */steam/htmlcache*
+toss path: */steam/htmlcache/*
+
+keep path: */saved games/*
+keep path: */saved games
+keep path: */saves/*
+keep path: */savegames/*
+keep name: *savegame*
+keep name: *save-game*

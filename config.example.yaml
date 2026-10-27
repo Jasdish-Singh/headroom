@@ -1,0 +1,56 @@
+# Headroom defaults. Same fields as config.example.toml.
+# Cleanup targets cannot be added here. `enabled` may only name built-in ids.
+# tracking.paths are read-only snapshot roots. They are never deleted.
+
+monitor:
+  interval_seconds: 30
+  battery_interval_seconds: 120
+  idle_interval_seconds: 90
+  pressure_interval_seconds: 10
+  idle_after_seconds: 300
+
+thresholds:
+  ram_percent: 85
+  ram_sustained_seconds: 120
+  disk_warn_free_gb: 30
+  disk_critical_free_gb: 15
+  drives:
+    - "C:"
+
+report:
+  top_processes: 10
+  scan_top: 20
+
+notifications:
+  toast: true
+
+cleanup:
+  enabled:
+    - user_temp
+    - windows_temp
+    - chrome_cache
+    - edge_cache
+    - firefox_cache
+    - thumbnail_cache
+    - recycle_bin
+
+logging: {}
+
+tracking:
+  history_max_mb: 32
+  process_every: 5
+  large_file_mb: 500
+  fast_drop_gb: 2
+  fast_drop_window_seconds: 3600
+  fast_drop_max_gap_seconds: 600
+  leak_window_seconds: 21600
+  leak_growth_mb: 400
+  deep_scan_dirs_per_tick: 25
+  deep_scan_budget_seconds: 0.2
+  paths: []
+
+widget:
+  # Launch Roomy with `headroom watch`. The pet is read-only.
+  autostart: false
+  # Static face. Mood still changes. Walking and blinking stay off.
+  lite: false

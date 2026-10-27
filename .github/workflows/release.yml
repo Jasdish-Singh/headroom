@@ -1,0 +1,80 @@
+# Manual build of headroom.exe. Signing runs only when the matching secret is set.
+# This workflow does not upload to PyPI, winget, or the MCP Registry.
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  windows-exe:
+    name: Build headroom.exe
+    runs-on: windows-latest
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build headroom.exe
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller ".[tray,mcp]"
+          python -m PyInstaller --noconfirm packaging/headroom.spec
+
+      - name: Azure login
+        if: env.AZURE_CLIENT_ID != ''
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign with Azure Trusted Signing
+        if: env.AZURE_CLIENT_ID != ''
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT != '' && vars.AZURE_SIGNING_ENDPOINT || 'https://eus.codesigning.azure.net/' }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+          files-folder: ${{ github.workspace }}\dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Upload unsigned exe for SignPath
+        id: upload-unsigned
+        if: env.AZURE_CLIENT_ID == '' && env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: headroom-unsigned
+          path: dist/headroom.exe
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        if: env.AZURE_CLIENT_ID == '' && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist
+
+      - name: Upload headroom.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: headroom.exe
+          path: dist/headroom.exe
+          if-no-files-found: error

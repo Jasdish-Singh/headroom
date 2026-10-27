@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "headroom-pc"
+version = "0.1.0"
+description = "Always-on RAM and disk watcher for a Windows laptop, with history, file review, and allowlisted cleanup."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Jasdish Singh" }]
+keywords = ["windows", "memory", "disk", "cleanup", "monitor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "psutil>=5.9.0",
+    "PyYAML>=6.0.1",
+]
+
+[project.optional-dependencies]
+tray = [
+    "pystray>=0.19.5",
+    "Pillow>=10.0.0",
+]
+mcp = [
+    "mcp>=2.0,<3",
+]
+dev = [
+    "pytest>=8.0",
+    "mcp>=2.0,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/Jasdish-Singh/headroom"
+Repository = "https://github.com/Jasdish-Singh/headroom"
+Issues = "https://github.com/Jasdish-Singh/headroom/issues"
+
+[project.scripts]
+headroom = "headroom.cli:main"
+headroom-pc = "headroom.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+headroom = ["py.typed", "pets/*.png", "profiles/*.rules"]
+"headroom.profiles" = ["*.rules"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--tb=short"

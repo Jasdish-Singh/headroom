@@ -1,0 +1,64 @@
+# Developer
+# Source is kept. Build output opened in the last 14 days is kept.
+# node_modules is tossable. Build output last opened 14 days ago or
+# earlier is tossable. Last matching rule wins, so a source file inside
+# node_modules is still tossable.
+
+keep ext: .py
+keep ext: .pyi
+keep ext: .js
+keep ext: .jsx
+keep ext: .ts
+keep ext: .tsx
+keep ext: .mjs
+keep ext: .cjs
+keep ext: .rs
+keep ext: .go
+keep ext: .java
+keep ext: .c
+keep ext: .h
+keep ext: .hpp
+keep ext: .cpp
+keep ext: .cs
+keep ext: .rb
+keep ext: .php
+keep ext: .swift
+keep ext: .kt
+keep ext: .kts
+keep ext: .scala
+keep ext: .toml
+keep ext: .json
+keep ext: .yaml
+keep ext: .yml
+keep ext: .md
+keep ext: .lock
+keep name: package.json
+keep name: pyproject.toml
+keep name: cargo.toml
+keep name: go.mod
+keep name: go.sum
+keep path: */.git
+keep path: */.git/*
+
+keep path: */build/* newer-than: 14d
+keep path: */dist/* newer-than: 14d
+keep path: */target/* newer-than: 14d
+keep path: */out/* newer-than: 14d
+
+toss path: */node_modules
+toss path: */node_modules/*
+toss path: */__pycache__
+toss path: */__pycache__/*
+toss path: */.next
+toss path: */.next/*
+toss path: */bower_components
+toss path: */bower_components/*
+
+toss path: */build/* older-than: 14d
+toss path: */dist/* older-than: 14d
+toss path: */target/* older-than: 14d
+toss path: */out/* older-than: 14d
+toss ext: .o older-than: 14d
+toss ext: .obj older-than: 14d
+toss ext: .pyc older-than: 14d
+toss ext: .class older-than: 14d

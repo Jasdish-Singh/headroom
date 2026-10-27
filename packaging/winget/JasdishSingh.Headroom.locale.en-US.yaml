@@ -1,0 +1,9 @@
+PackageIdentifier: JasdishSingh.Headroom
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Jasdish Singh
+PackageName: Headroom
+License: MIT
+ShortDescription: Watch RAM and disk, review files, and clean only known-safe caches.
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

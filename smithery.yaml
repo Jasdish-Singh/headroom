@@ -1,0 +1,9 @@
+# Smithery launches the published console script. https://smithery.ai/docs/build/project-config
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties: {}
+  commandFunction: |-
+    (config) => ({ command: 'headroom', args: ['mcp'] })
+  exampleConfig: {}
