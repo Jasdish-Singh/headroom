@@ -7,6 +7,7 @@ platform allows it. If an entry cannot be classified, it is not descended.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
 from dataclasses import dataclass
@@ -197,6 +198,39 @@ def plan_deletions(root: Path) -> list[tuple[str, Path]]:
         for name in reversed(names):
             stack.append((current / name, False))
     return plan
+
+
+def hash_file(path: Path, limit: int | None = None) -> str | None:
+    """SHA-256 of the first ``limit`` bytes, or of the whole file.
+
+    Returns None when the file cannot be read. A symlink is not followed.
+    """
+    # Without O_BINARY, Windows reads stop at the first 0x1A byte and CRLF becomes LF.
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    noatime = getattr(os, "O_NOATIME", 0)
+    fd = None
+    try:
+        try:
+            fd = os.open(path, flags | noatime)
+        except PermissionError:
+            if not noatime:
+                raise
+            fd = os.open(path, flags)
+        hasher = hashlib.sha256()
+        remaining = limit
+        while remaining is None or remaining > 0:
+            chunk = os.read(fd, 65536 if remaining is None else min(65536, remaining))
+            if not chunk:
+                break
+            hasher.update(chunk)
+            if remaining is not None:
+                remaining -= len(chunk)
+        return hasher.hexdigest()
+    except OSError:
+        return None
+    finally:
+        if fd is not None:
+            os.close(fd)
 
 
 def _list_via_fd(path: Path) -> list[str]:

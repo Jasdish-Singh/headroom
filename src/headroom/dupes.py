@@ -6,12 +6,10 @@ tie. The other copies are suggestions. This module does not move files.
 
 from __future__ import annotations
 
-import hashlib
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from headroom.walk import classify_path, list_child_names
+from headroom.walk import classify_path, hash_file, list_child_names
 
 PARTIAL_BYTES = 64 * 1024
 
@@ -54,7 +52,7 @@ def find_duplicates(roots: list[Path]) -> tuple[list[DupeGroup], int]:
             continue
         partials: dict[str, list[DupeFile]] = {}
         for item in members:
-            digest = _hash_file(Path(item.path), PARTIAL_BYTES)
+            digest = hash_file(Path(item.path), PARTIAL_BYTES)
             if digest is None:
                 continue
             partials.setdefault(digest, []).append(item)
@@ -63,7 +61,7 @@ def find_duplicates(roots: list[Path]) -> tuple[list[DupeGroup], int]:
                 continue
             full: dict[str, list[DupeFile]] = {}
             for item in subset:
-                digest = _hash_file(Path(item.path), None)
+                digest = hash_file(Path(item.path), None)
                 if digest is None:
                     continue
                 full.setdefault(digest, []).append(item)
@@ -166,31 +164,3 @@ def _file(path: Path) -> DupeFile | None:
     except OSError:
         return None
     return DupeFile(str(path), int(stat_result.st_size), float(stat_result.st_atime or stat_result.st_mtime or 0))
-
-
-def _hash_file(path: Path, limit: int | None) -> str | None:
-    flags = os.O_RDONLY
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    if nofollow:
-        flags |= nofollow
-    fd = None
-    try:
-        fd = os.open(path, flags)
-        hasher = hashlib.sha256()
-        remaining = limit
-        while True:
-            chunk_size = 65536 if remaining is None else min(65536, remaining)
-            if chunk_size <= 0:
-                break
-            chunk = os.read(fd, chunk_size)
-            if not chunk:
-                break
-            hasher.update(chunk)
-            if remaining is not None:
-                remaining -= len(chunk)
-        return hasher.hexdigest()
-    except OSError:
-        return None
-    finally:
-        if fd is not None:
-            os.close(fd)
