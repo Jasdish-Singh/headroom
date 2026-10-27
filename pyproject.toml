@@ -23,6 +23,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
+    "mcp>=2.0,<3",
     "psutil>=5.9.0",
     "PyYAML>=6.0.1",
 ]
@@ -32,12 +33,10 @@ tray = [
     "pystray>=0.19.5",
     "Pillow>=10.0.0",
 ]
-mcp = [
-    "mcp>=2.0,<3",
-]
+# Empty on purpose: the MCP SDK is a core dependency now, and "headroom-pc[mcp]" must still install.
+mcp = []
 dev = [
     "pytest>=8.0",
-    "mcp>=2.0,<3",
 ]
 
 [project.urls]

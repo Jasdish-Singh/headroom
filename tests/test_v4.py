@@ -7,6 +7,7 @@ import importlib.util
 import inspect
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -15,6 +16,7 @@ from urllib.parse import urlencode
 
 import pytest
 
+import headroom
 from headroom.analyze import FileRecord
 from headroom.cli import main
 from headroom.config import Config
@@ -792,6 +794,16 @@ def test_mcp_tools_are_read_only_or_dry_run(tmp_path: Path, monkeypatch: pytest.
     assert HEALTH_CHECK_PROMPT.strip("\n") in readme
 
 
+def test_mcp_command_explains_a_missing_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delitem(sys.modules, "headroom.mcp_server", raising=False)
+    monkeypatch.setitem(sys.modules, "mcp.server.mcpserver", None)
+    assert main(["--no-log", "mcp"]) == 2
+    assert "pip install --upgrade headroom-pc" in capsys.readouterr().err
+
+
 def test_packaging_and_readme_document_the_exe_and_mcp() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "claude_desktop_config.json" in readme
@@ -807,8 +819,11 @@ def test_packaging_and_readme_document_the_exe_and_mcp() -> None:
     iss = (ROOT / "packaging" / "headroom.iss").read_text(encoding="utf-8")
     assert "headroom.exe" in iss
     winget = (ROOT / "packaging" / "winget" / "JasdishSingh.Headroom.installer.yaml").read_text(encoding="utf-8")
-    assert "placeholder" in winget
-    assert "0000000000000000000000000000000000000000000000000000000000000000" in winget
+    version = re.search(r"^PackageVersion: (\S+)$", winget, re.MULTILINE).group(1)
+    assert version == headroom.__version__
+    assert f"/releases/download/v{version}/headroom-{version}-windows-x64.exe" in winget
+    sha = re.search(r"^\s*InstallerSha256: ([0-9A-F]{64})$", winget, re.MULTILINE).group(1)
+    assert set(sha) != {"0"}
     workflow = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
     assert "upload-artifact" in workflow
     assert "dist/headroom.exe" in workflow

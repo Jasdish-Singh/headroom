@@ -1099,7 +1099,7 @@ def cmd_mcp(args, config: Config, config_path: Path | None, logger, log_path: Pa
         from headroom.mcp_server import serve
     except ModuleNotFoundError:
         print(
-            'headroom: MCP support is not installed. pip install "headroom[mcp]"',
+            "headroom: the MCP package is missing. Reinstall with: pip install --upgrade headroom-pc",
             file=sys.stderr,
         )
         return 2

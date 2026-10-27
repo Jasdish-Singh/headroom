@@ -7,13 +7,13 @@ The ``health_check`` prompt is the same text as ``docs/ai-starter-prompt.md``.
 
 from __future__ import annotations
 
+from mcp.server.mcpserver import MCPServer
+
 from headroom.mcp_prompts import HEALTH_CHECK_NAME, HEALTH_CHECK_PROMPT
 from headroom.mcp_tools import TOOLS
 
 
-def build_server():
-    from mcp.server.mcpserver import MCPServer
-
+def build_server() -> MCPServer:
     server = MCPServer("Headroom", instructions=(
         "Headroom tools are local and read-only. clean, move, and startup_disable "
         "return a dry-run plan. They do not delete or move files. The person confirms "

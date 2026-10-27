@@ -27,26 +27,24 @@ Headroom sits in the tray, keeps a small history, and shows what is full. Cleanu
 
 ## Install
 
-The command is `headroom`. Python 3.11 or newer.
+The command is `headroom`.
 
-**Exe.** `headroom.exe` and `Headroom-Setup` from [GitHub Releases](https://github.com/Jasdish-Singh/headroom/releases) once a release is published. Setup does not clean anything and does not register a logon task.
+**Exe.** `headroom-<version>-windows-x64.exe` from [GitHub Releases](https://github.com/Jasdish-Singh/headroom/releases). It is one portable file. Save it as `headroom.exe` in a folder you keep.
 
-**winget,** after the manifest is published:
+**winget,** after the manifest is accepted:
 
 ```powershell
 winget install JasdishSingh.Headroom
 ```
 
-The URL and SHA256 in `packaging/winget` are still placeholders.
-
-**pip.** The PyPI name is `headroom-pc`.
+**pip.** The PyPI name is `headroom-pc`. Python 3.11 or newer.
 
 ```powershell
-py -3.12 -m pip install "headroom-pc[tray,mcp]"
+py -3.12 -m pip install "headroom-pc[tray]"
 headroom status
 ```
 
-`tray` is the icon. `mcp` is the assistant server.
+`tray` adds the tray icon. The MCP server is always included.
 
 ## Quick start
 
