@@ -13,7 +13,7 @@ Headroom sits in the tray, keeps a small history, and shows what is full. Cleanu
 [Jasdish Singh](https://github.com/Jasdish-Singh). [MIT](LICENSE), 2026.
 
 <p>
-  <img alt="Roomy on a Windows desktop" src="docs/images/roomy-desktop.png" width="720">
+  <img alt="Roomy on a Windows desktop" src="https://raw.githubusercontent.com/Jasdish-Singh/headroom/main/docs/images/roomy-desktop.png" width="720">
 </p>
 
 ## What it does
@@ -69,7 +69,7 @@ Commands, defaults, and exit codes: [docs/commands.md](docs/commands.md).
 Roomy is a small beige monitor. The cord is the tail. It walks a little and changes face with the PC. It cannot clean, move, or delete.
 
 <p>
-  <img alt="Roomy close up" src="docs/images/roomy-zoom.png" width="360">
+  <img alt="Roomy close up" src="https://raw.githubusercontent.com/Jasdish-Singh/headroom/main/docs/images/roomy-zoom.png" width="360">
 </p>
 
 ```powershell
