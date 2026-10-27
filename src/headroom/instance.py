@@ -7,19 +7,28 @@ from pathlib import Path
 
 from headroom.logsetup import default_log_path
 
+# Windows byte-range locks are mandatory: nobody else can read the locked byte 0.
+# The pid is written after it so other processes can still read it.
+_PID_OFFSET = 8
+_RECORD_BYTES = 48
+
 
 def default_lock_path(env=None, home: Path | None = None) -> Path:
     return default_log_path(env, home).parent / "headroom.lock"
 
 
 def read_lock_pid(path: Path) -> int | None:
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    for offset in (0, _PID_OFFSET):
+        try:
+            with open(path, "rb") as handle:
+                handle.seek(offset)
+                data = handle.read(_RECORD_BYTES)
+        except OSError:
+            continue
+        tokens = data.split()
+        if tokens and tokens[0].isdigit():
+            return int(tokens[0])
         return None
-    token = text.split()[0] if text.split() else ""
-    if token.isdigit():
-        return int(token)
     return None
 
 
@@ -34,7 +43,7 @@ class InstanceLock:
         """Return False when another live process already holds the lock."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o600)
+            fd = os.open(self.path, os.O_CREAT | os.O_RDWR | getattr(os, "O_BINARY", 0), 0o600)
         except OSError as exc:
             # Windows locks are mandatory, so the second open can fail before flock.
             if _lock_is_busy(exc):
@@ -70,9 +79,6 @@ class InstanceLock:
             import msvcrt
 
             os.lseek(fd, 0, os.SEEK_SET)
-            if os.fstat(fd).st_size < 1:
-                os.write(fd, b"\0")
-                os.lseek(fd, 0, os.SEEK_SET)
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
             return
         import fcntl
@@ -91,15 +97,9 @@ class InstanceLock:
         fcntl.flock(fd, fcntl.LOCK_UN)
 
     def _write_pid(self, fd: int) -> None:
-        payload = f"{os.getpid()}\n".encode("ascii")
-        if os.name == "nt":
-            payload = payload.ljust(32, b" ")
-            os.lseek(fd, 0, os.SEEK_SET)
-            os.write(fd, payload)
-        else:
-            os.ftruncate(fd, 0)
-            os.lseek(fd, 0, os.SEEK_SET)
-            os.write(fd, payload)
+        record = b" " * _PID_OFFSET + f"{os.getpid()}\n".encode("ascii")
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.write(fd, record.ljust(_RECORD_BYTES, b" "))
         try:
             os.fsync(fd)
         except OSError:
