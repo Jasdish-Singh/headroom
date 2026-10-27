@@ -4,10 +4,10 @@ PackageVersion: 0.1.1
 InstallerType: portable
 Commands:
   - headroom
-ReleaseDate: 2026-10-26
+ReleaseDate: 2026-10-27
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/Jasdish-Singh/headroom/releases/download/v0.1.1/headroom-0.1.1-windows-x64.exe
-    InstallerSha256: 7740195BC012DC26767D342AC61B041FF4AA60D078F02BC6469A88C48063106B
+    InstallerSha256: F15BF5ACDB98FEEC7FF43EDC69F4FBDE91CEA392824F25415FB0236AC7442A4A
 ManifestType: installer
 ManifestVersion: 1.6.0
