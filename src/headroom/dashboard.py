@@ -64,6 +64,10 @@ def bind_dashboard(
     explainer=None,
     interval_seconds: int = 30,
     live_probe=None,
+    widget_lite: bool = False,
+    widget_default: bool = False,
+    pet_start=None,
+    pet_stop=None,
 ) -> ThreadingHTTPServer:
     if host != "127.0.0.1":
         raise DashboardError("the dashboard only binds to 127.0.0.1")
@@ -100,13 +104,36 @@ def bind_dashboard(
             if path == "/api/review":
                 _send(self, 200, json.dumps(_review_payload(folder, explainer, now, today)), content_type="application/json")
                 return
+            if path == "/api/widget":
+                _send(self, 200, json.dumps(_widget_state(folder, widget_default)), content_type="application/json")
+                return
             _send(self, 404, "Not found")
 
         def do_POST(self) -> None:  # noqa: N802
             if not _authorized(self, token):
                 _send(self, 403, "Forbidden")
                 return
-            if urlparse(self.path).path != "/move":
+            path = urlparse(self.path).path
+            if path == "/api/widget":
+                fields = _form(self)
+                raw = fields.get("enabled") or fields.get("on")
+                value = (raw[0] if raw else "").strip().casefold()
+                if value in {"1", "true", "on", "yes"}:
+                    from headroom.pet import set_pet_enabled
+
+                    set_pet_enabled(True, folder)
+                    (pet_start or _default_pet_start)(folder, widget_lite)
+                elif value in {"0", "false", "off", "no"}:
+                    from headroom.pet import set_pet_enabled
+
+                    set_pet_enabled(False, folder)
+                    (pet_stop or _default_pet_stop)(folder)
+                else:
+                    _send(self, 400, "enabled must be true or false", content_type="application/json")
+                    return
+                _send(self, 200, json.dumps(_widget_state(folder, widget_default)), content_type="application/json")
+                return
+            if path != "/move":
                 _send(self, 404, "Not found")
                 return
             fields = _form(self)
@@ -428,6 +455,29 @@ def _quiet_client() -> OllamaClient:
     return OllamaClient(opener=opener, timeout=0.2)
 
 
+def _widget_state(folder: Path, widget_default: bool) -> dict[str, object]:
+    """The Roomy toggle as the page sees it: on/off plus whether it is running."""
+    from headroom.pet import pet_enabled, pet_running
+
+    enabled = pet_enabled(folder)
+    running = pet_running(folder)
+    if enabled is None:
+        enabled = running or bool(widget_default)
+    return {"on": bool(enabled), "running": bool(running)}
+
+
+def _default_pet_start(folder: Path, lite: bool) -> None:
+    from headroom.pet import launch_pet_detached
+
+    launch_pet_detached(lite=lite, directory=folder)
+
+
+def _default_pet_stop(folder: Path) -> None:
+    from headroom.pet import send_control
+
+    send_control("quit", folder)
+
+
 def _page(token: str, minutes: int = 1) -> str:
     safe = html.escape(token, quote=True)
     waiting = html.escape(collecting_message(minutes))
@@ -438,35 +488,62 @@ def _page(token: str, minutes: int = 1) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Headroom</title>
 <style>
-  body {{ margin: 0; font: 15px/1.45 "Segoe UI", sans-serif; background: #10140f; color: #e7ecdf; }}
-  main {{ max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }}
-  h1 {{ font-size: 1.4rem; margin: 0 0 4px; }}
-  p {{ color: #c5d0b8; }}
-  canvas {{ width: 100%; height: 180px; background: #1a2118; border-radius: 8px; }}
-  section {{ margin-top: 28px; }}
-  .note {{ color: #e6c36a; margin: 8px 0; }}
-  pre {{ white-space: pre-wrap; background: #1a2118; padding: 12px; border-radius: 8px; min-height: 4.5em; }}
-  article {{ background: #1a2118; padding: 12px; border-radius: 8px; margin-bottom: 10px; }}
+  :root {{
+    color-scheme: dark;
+    --bg: #1f1f1f;
+    --panel: #282828;
+    --border: #3a3a3a;
+    --text: #f2f2f2;
+    --muted: #9a9a9a;
+    --accent: #4cc2ff;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; font: 14px/1.5 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }}
+  main {{ max-width: 1040px; margin: 0 auto; padding: 20px 24px 48px; }}
+  h1 {{ font-size: 1.25rem; font-weight: 600; margin: 0 0 2px; }}
+  h2 {{ font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 10px; }}
+  .subtitle {{ color: var(--muted); margin: 0 0 22px; }}
+  section {{ border-top: 1px solid var(--border); padding: 18px 0; }}
+  .note {{ color: var(--muted); margin: 4px 0 8px; }}
+  .live {{ font-size: 1.05rem; margin: 0; }}
+  canvas {{ display: block; width: 100%; height: 180px; background: var(--panel); }}
+  pre {{ white-space: pre-wrap; background: var(--panel); border: 1px solid var(--border); padding: 12px; margin: 0; min-height: 4.5em; font: 13px/1.5 "Consolas", monospace; }}
+  article {{ border: 1px solid var(--border); padding: 10px 12px; margin-bottom: 8px; }}
+  article p {{ margin: 4px 0 0; color: var(--muted); }}
   label {{ display: block; margin-top: 8px; }}
-  input[type="text"] {{ margin-top: 4px; }}
-  button {{ margin-top: 8px; }}
-  button:disabled {{ opacity: 0.65; }}
+  input[type="text"] {{ margin-top: 4px; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 8px; }}
+  button {{ margin-top: 10px; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 14px; cursor: pointer; }}
+  button:hover {{ border-color: var(--accent); }}
+  button:disabled {{ opacity: 0.5; cursor: default; }}
+  .switch {{ display: flex; align-items: center; gap: 10px; }}
+  .switch input {{ width: 16px; height: 16px; margin: 0; }}
+  .switch span {{ color: var(--text); }}
 </style>
 </head>
 <body>
 <main>
   <h1>Headroom</h1>
-  <p>This page stays on this computer. Approving a file moves it to the Recycle Bin when Windows accepts it, otherwise into the Headroom archive. It does not permanently delete. Cache cleanup still uses Type YES in a terminal.</p>
+  <p class="subtitle">This page stays on this computer. Approving a review moves files to the Recycle Bin when Windows accepts them, otherwise into the archive. Nothing here permanently deletes; cache cleanup still uses Type YES in a terminal.</p>
+  <section>
+    <h2>Roomy</h2>
+    <label class="switch">
+      <input type="checkbox" id="roomy-toggle">
+      <span id="roomy-label">Checking Roomy...</span>
+    </label>
+  </section>
+  <section>
+    <h2>Now</h2>
+    <p id="live" class="live">Loading the live reading...</p>
+  </section>
   <section>
     <h2>RAM</h2>
-    <p id="live" class="note">Loading the live reading...</p>
     <p id="ram-note" class="note">{waiting}</p>
-    <canvas id="ram" width="900" height="180"></canvas>
+    <canvas id="ram"></canvas>
   </section>
   <section>
     <h2>Free space</h2>
     <p id="disk-note" class="note">{waiting}</p>
-    <canvas id="disk" width="900" height="180"></canvas>
+    <canvas id="disk"></canvas>
   </section>
   <section>
     <h2>Latest report</h2>
@@ -509,15 +586,25 @@ function liveLine(live) {{
   return "Live " + (parts.length ? parts.join(" · ") : "No live reading yet.") + " (" + source + ").";
 }}
 function draw(canvas, values, emptyText) {{
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, rect.width || 900);
+  const cssH = 180;
+  const w = Math.round(cssW * dpr);
+  const h = Math.round(cssH * dpr);
+  if (canvas.width !== w || canvas.height !== h) {{
+    canvas.width = w;
+    canvas.height = h;
+  }}
   const ctx = canvas.getContext("2d");
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.font = "15px Segoe UI, sans-serif";
-  ctx.strokeStyle = "#8fbf7a";
-  ctx.lineWidth = 2;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.font = "13px 'Segoe UI', sans-serif";
+  ctx.strokeStyle = "#4cc2ff";
+  ctx.lineWidth = 1.5;
   if (!values.length) {{
-    ctx.fillStyle = "#e6c36a";
-    ctx.fillText(emptyText || waiting, 16, 32);
+    ctx.fillStyle = "#9a9a9a";
+    ctx.fillText(emptyText || waiting, 12, 28);
     return;
   }}
   let min = Math.min.apply(null, values);
@@ -525,8 +612,8 @@ function draw(canvas, values, emptyText) {{
   if (min === max) {{ max = min + 1; }}
   ctx.beginPath();
   values.forEach((value, index) => {{
-    const x = values.length === 1 ? 0 : (index / (values.length - 1)) * (w - 16) + 8;
-    const y = h - 12 - ((value - min) / (max - min)) * (h - 24);
+    const x = values.length === 1 ? 0 : (index / (values.length - 1)) * (cssW - 16) + 8;
+    const y = cssH - 14 - ((value - min) / (max - min)) * (cssH - 28);
     if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }});
   ctx.stroke();
@@ -597,7 +684,45 @@ async function load() {{
     );
   }}
 }}
+const roomyToggle = document.getElementById("roomy-toggle");
+const roomyLabel = document.getElementById("roomy-label");
+function setRoomy(on, running) {{
+  roomyToggle.checked = !!on;
+  roomyLabel.textContent = on ? (running ? "Roomy is running" : "Roomy is on") : "Roomy is off";
+}}
+async function loadRoomy() {{
+  const headers = {{"X-Headroom-Token": token}};
+  try {{
+    const r = await fetch("/api/widget?token=" + encodeURIComponent(token), {{headers}});
+    if (!r.ok) throw new Error("widget");
+    const w = await r.json();
+    setRoomy(w.on, w.running);
+  }} catch (err) {{
+    roomyLabel.textContent = "Roomy state unavailable";
+    roomyToggle.disabled = true;
+  }}
+}}
+roomyToggle.addEventListener("change", async () => {{
+  const enabled = roomyToggle.checked;
+  roomyLabel.textContent = enabled ? "Starting Roomy..." : "Stopping Roomy...";
+  roomyToggle.disabled = true;
+  try {{
+    const r = await fetch("/api/widget?token=" + encodeURIComponent(token), {{
+      method: "POST",
+      headers: {{"X-Headroom-Token": token, "Content-Type": "application/json"}},
+      body: JSON.stringify({{enabled: enabled}}),
+    }});
+    if (!r.ok) throw new Error("widget");
+    const w = await r.json();
+    setRoomy(w.on, w.running);
+  }} catch (err) {{
+    roomyLabel.textContent = "Could not change Roomy";
+  }} finally {{
+    roomyToggle.disabled = false;
+  }}
+}});
 load();
+loadRoomy();
 </script>
 </body>
 </html>

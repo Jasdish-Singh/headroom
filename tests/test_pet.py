@@ -33,6 +33,7 @@ from headroom.pet import (
     measure_pet_cost,
     menu_entries,
     pet_enabled,
+    pet_running,
     publish_watch_sample,
     read_watch_sample,
     review_should_sparkle,
@@ -295,6 +296,12 @@ def test_dashboard_toggle_overrides_autostart(tmp_path: Path) -> None:
     assert launched == ["yes"]
     assert launch_pet_if_needed(Config(widget_autostart=True), once=True, directory=tmp_path) is False
     assert pet_enabled(tmp_path / "never") is None
+
+
+def test_pet_running_is_false_without_a_live_process(tmp_path: Path) -> None:
+    assert pet_running(tmp_path) is False
+    (tmp_path / "pet.port").write_text("65534 99999999\n", encoding="utf-8")
+    assert pet_running(tmp_path) is False
 
 
 def test_sprites_are_cropped_once() -> None:

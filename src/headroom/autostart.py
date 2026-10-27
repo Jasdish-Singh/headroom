@@ -61,10 +61,16 @@ def watch_command(executable: Path | None = None) -> list[str]:
 
 
 def logon_commands(*, include_pet: bool = False, executable: Path | None = None) -> list[list[str]]:
-    """Watch, plus Roomy when ``widget.autostart`` is on."""
+    """Watch, plus Roomy when ``widget.autostart`` is on.
+
+    The pet action carries ``--if-enabled`` so the logon launch honors the
+    dashboard on/off toggle instead of forcing Roomy back on after a reboot.
+    """
     commands = [app_command("watch", executable)]
     if include_pet:
-        commands.append(app_command("pet", executable))
+        pet = app_command("pet", executable)
+        pet.append("--if-enabled")
+        commands.append(pet)
     return commands
 
 

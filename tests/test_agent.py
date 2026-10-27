@@ -486,17 +486,17 @@ def test_frozen_logon_launcher_starts_watch_and_optional_pet(
     assert app_command("watch") == [exe, "watch"]
     assert logon_commands(include_pet=False) == [[exe, "watch"]]
     both = logon_commands(include_pet=True)
-    assert both == [[exe, "watch"], [exe, "pet"]]
+    assert both == [[exe, "watch"], [exe, "pet", "--if-enabled"]]
     xml = build_task_xml(both[0], commands=both)
     assert xml.count("<Exec>") == 2
     assert "headroom.exe" in xml
     assert ">watch<" in xml
-    assert ">pet<" in xml
+    assert ">pet --if-enabled<" in xml
     assert "-m headroom" not in xml
     script = vbs_source(both[0], commands=both)
     assert script.count("Wscript.Shell") == 2
     assert '""C:\\Program Files\\Headroom\\headroom.exe"" watch' in script
-    assert '""C:\\Program Files\\Headroom\\headroom.exe"" pet' in script
+    assert '""C:\\Program Files\\Headroom\\headroom.exe"" pet --if-enabled' in script
 
     calls: list[list[str]] = []
 

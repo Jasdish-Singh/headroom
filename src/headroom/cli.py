@@ -98,9 +98,11 @@ from headroom.pet import (
     load_skins,
     mark_scan,
     mark_sparkle,
+    pet_enabled,
     review_should_sparkle,
     run_pet,
     send_control,
+    set_pet_enabled,
 )
 from headroom.watch import run_tray, run_watch_loop
 
@@ -437,6 +439,12 @@ def build_parser() -> argparse.ArgumentParser:
             "--lite",
             action="store_true",
             help="static pet; the face changes with mood and does not walk",
+        )
+        pet_cmd.add_argument(
+            "--if-enabled",
+            action="store_true",
+            dest="if_enabled",
+            help="start Roomy only if the dashboard toggle is on (used at sign-in)",
         )
         pet_cmd.set_defaults(func=cmd_pet)
     return parser
@@ -890,6 +898,8 @@ def cmd_dashboard(args, config: Config, config_path: Path | None, logger, log_pa
         token,
         directory=state_dir(),
         interval_seconds=config.interval_seconds,
+        widget_lite=config.widget_lite,
+        widget_default=config.widget_autostart,
     )
     return 0
 
@@ -1058,12 +1068,15 @@ def cmd_downloads(args, config: Config, config_path: Path | None, logger, log_pa
 def cmd_pet(args, config: Config, config_path: Path | None, logger, log_path: Path | None) -> int:
     """Open Roomy. A second launch shows the pet that is already running."""
     del config_path, logger, log_path
+    if getattr(args, "if_enabled", False) and pet_enabled() is False:
+        return 0
     chosen = getattr(args, "skin", None)
     if chosen and chosen not in load_skins():
         known = ", ".join(sorted(load_skins()))
         print(f"headroom: unknown skin {chosen}. Known skins: {known}", file=sys.stderr)
         return 2
     if send_control("show"):
+        set_pet_enabled(True)
         print("Roomy is already out.")
         return 0
     lock = InstanceLock(state_dir() / "pet.lock")
@@ -1074,10 +1087,12 @@ def cmd_pet(args, config: Config, config_path: Path | None, logger, log_path: Pa
         return 2
     if not acquired:
         if send_control("show"):
+            set_pet_enabled(True)
             print("Roomy is already out.")
         else:
             print("Roomy is already running.")
         return 0
+    set_pet_enabled(True)
     try:
         run_pet(config, skin=chosen, lite=bool(getattr(args, "lite", False)))
     except ModuleNotFoundError:

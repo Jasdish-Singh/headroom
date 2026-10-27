@@ -722,7 +722,8 @@ class ControlServer:
         self._sock.listen(4)
         self._sock.settimeout(0.2)
         self.port = int(self._sock.getsockname()[1])
-        (directory / "pet.port").write_text(f"{self.port} {os.getpid()}\n", encoding="utf-8")
+        self._port_path = directory / "pet.port"
+        self._port_path.write_text(f"{self.port} {os.getpid()}\n", encoding="utf-8")
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._loop, name="headroom-pet-control", daemon=True)
         self._thread.start()
@@ -733,6 +734,12 @@ class ControlServer:
             self._sock.close()
         except OSError:
             pass
+        try:
+            text = self._port_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            text = ""
+        if text.split()[:2] == [str(self.port), str(os.getpid())]:
+            self._port_path.unlink(missing_ok=True)
 
     def _loop(self) -> None:
         while not self._stop.is_set():

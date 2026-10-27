@@ -193,6 +193,73 @@ def test_empty_history_falls_back_to_a_direct_sample(tmp_path: Path) -> None:
         thread.join(timeout=5)
 
 
+def test_widget_toggle_starts_stops_and_persists(tmp_path: Path) -> None:
+    started: list[tuple[Path, bool]] = []
+    stopped: list[Path] = []
+
+    def start(folder: Path, lite: bool) -> None:
+        started.append((folder, lite))
+
+    def stop(folder: Path) -> None:
+        stopped.append(folder)
+
+    token = new_token()
+    server = bind_dashboard(
+        "127.0.0.1",
+        0,
+        token,
+        directory=tmp_path,
+        history=tmp_path / "missing.db",
+        pet_start=start,
+        pet_stop=stop,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = int(server.server_address[1])
+    try:
+        status, body = _request(port, "GET", f"/api/widget?token={token}")
+        assert status == 200
+        assert json.loads(body) == {"on": False, "running": False}
+
+        status, body = _request(
+            port,
+            "POST",
+            f"/api/widget?token={token}",
+            body=json.dumps({"enabled": True}).encode(),
+            headers={"Content-Type": "application/json", "X-Headroom-Token": token},
+        )
+        assert status == 200
+        assert json.loads(body)["on"] is True
+        assert started == [(tmp_path, False)]
+        assert stopped == []
+        assert (tmp_path / "widget.enabled").read_text(encoding="utf-8").strip() == "1"
+
+        status, body = _request(
+            port,
+            "POST",
+            f"/api/widget?token={token}",
+            body=json.dumps({"enabled": False}).encode(),
+            headers={"Content-Type": "application/json", "X-Headroom-Token": token},
+        )
+        assert status == 200
+        assert json.loads(body)["on"] is False
+        assert stopped == [tmp_path]
+        assert (tmp_path / "widget.enabled").read_text(encoding="utf-8").strip() == "0"
+
+        status, _body = _request(
+            port,
+            "POST",
+            f"/api/widget?token={token}",
+            body=json.dumps({"enabled": "maybe"}).encode(),
+            headers={"Content-Type": "application/json", "X-Headroom-Token": token},
+        )
+        assert status == 400
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_second_dashboard_opens_the_existing_url(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     import socket
 
