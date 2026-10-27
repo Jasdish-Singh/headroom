@@ -626,7 +626,7 @@ function setMove(enabled, boxText, noteText) {{
   note.textContent = noteText;
   if (boxText !== null) document.getElementById("review").textContent = boxText;
 }}
-async function load() {{
+async function loadCharts() {{
   const headers = {{"X-Headroom-Token": token}};
   try {{
     const response = await fetch("/api/history?token=" + encodeURIComponent(token), {{headers}});
@@ -649,6 +649,9 @@ async function load() {{
     draw(document.getElementById("ram"), [], "Could not load the chart.");
     draw(document.getElementById("disk"), [], "Could not load the chart.");
   }}
+}}
+async function load() {{
+  const headers = {{"X-Headroom-Token": token}};
   try {{
     const response = await fetch("/api/report?token=" + encodeURIComponent(token), {{headers}});
     if (!response.ok) throw new Error("report");
@@ -721,8 +724,10 @@ roomyToggle.addEventListener("change", async () => {{
     roomyToggle.disabled = false;
   }}
 }});
+loadCharts();
 load();
 loadRoomy();
+setInterval(() => {{ loadCharts(); loadRoomy(); }}, 30000);
 </script>
 </body>
 </html>
