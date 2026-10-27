@@ -72,8 +72,8 @@ def test_publishing_metadata_matches_the_package() -> None:
     assert server["packages"][0]["packageArguments"][0]["value"] == "mcp"
     assert len(server["description"]) <= 100
     assert 'name = "headroom-pc"' in project
-    assert 'version = "0.1.0"' in project
-    assert server["version"] == "0.1.0"
+    assert 'version = "0.1.1"' in project
+    assert server["version"] == "0.1.1"
     assert "type: stdio" in smithery
     assert "command: 'headroom'" in smithery
     assert "args: ['mcp']" in smithery

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+- Dashboard rebuilt with a dark, plain layout.
+- Roomy on/off toggle in the dashboard. The setting persists.
+- The widget shows RAM only.
+- Duplicate finder hashes files in binary mode, fixing false duplicates.
+- The lock file keeps the holder's pid readable on Windows.
+- The MCP SDK now ships with headroom-pc.
+
 ## 0.1.0
 
 First public release.

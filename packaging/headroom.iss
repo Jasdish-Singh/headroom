@@ -5,7 +5,7 @@
 ; register a logon task. Run `headroom install` yourself if you want that.
 
 #define MyAppName "Headroom"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "Jasdish Singh"
 #define MyAppExeName "headroom.exe"
 

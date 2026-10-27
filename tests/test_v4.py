@@ -889,7 +889,7 @@ def test_new_commands_do_not_offer_first_run(tmp_path: Path) -> None:
 def test_version_is_public() -> None:
     import headroom
 
-    assert headroom.__version__ == "0.1.0"
+    assert headroom.__version__ == "0.1.1"
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.1.0"' in text
+    assert 'version = "0.1.1"' in text
     assert "mcp>=2.0,<3" in text

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "headroom-pc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Always-on RAM and disk watcher for a Windows laptop, with history, file review, and allowlisted cleanup."
 readme = "README.md"
 requires-python = ">=3.11"

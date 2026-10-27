@@ -1,6 +1,6 @@
-﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: JasdishSingh.Headroom
-PackageVersion: 0.1.0
+PackageVersion: 0.1.1
 PackageLocale: en-US
 Publisher: Jasdish Singh
 PublisherUrl: https://github.com/Jasdish-Singh
@@ -13,6 +13,6 @@ Tags:
   - disk
   - memory
   - cleanup
-ReleaseNotesUrl: https://github.com/Jasdish-Singh/headroom/releases/tag/v0.1.0
+ReleaseNotesUrl: https://github.com/Jasdish-Singh/headroom/releases/tag/v0.1.1
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
